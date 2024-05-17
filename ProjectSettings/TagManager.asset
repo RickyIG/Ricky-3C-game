@@ -15,9 +15,9 @@ TagManager:
   - Destroyable
   - Trampoline
   - RespawnDestroyable
-  - 
-  - 
-  - 
+  - GameOver
+  - YouWin
+  - TreeLeaves
   - 
   - 
   - 

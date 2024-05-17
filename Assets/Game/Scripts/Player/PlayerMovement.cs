@@ -1,10 +1,13 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
-
+using System;
+using UnityEditor;
 
 public class PlayerMovement : MonoBehaviour
 {
+    public Action OnGameOver;
+    public Action OnYouWin;
     [SerializeField]
     private float _walkSpeed;
     [SerializeField]
@@ -25,6 +28,10 @@ public class PlayerMovement : MonoBehaviour
     private float _detectorRadius;
     [SerializeField]
     private LayerMask _groundLayer;
+    [SerializeField]
+    private LayerMask _gameOverLayer;
+    [SerializeField]
+    private LayerMask _youWinLayer;
     [SerializeField]
     private Vector3 _upperStepOffset;
     [SerializeField]
@@ -75,6 +82,8 @@ public class PlayerMovement : MonoBehaviour
     private float _respawnDelay = 5.0f;
     [SerializeField]
     private GameObject _respawnPrefab;
+    [SerializeField]
+    private PlayerAudioManager _playerAudioManager;
 
     private Rigidbody _rigidbody;
     private float _speed;
@@ -178,9 +187,11 @@ public class PlayerMovement : MonoBehaviour
             movementDirection = horizontal + vertical;
             // _rigidbody.AddForce(movementDirection * _speed * Time.deltaTime);
             _rigidbody.AddForce(movementDirection * Time.deltaTime * _climbSpeed);
-            Vector3 velocity = new Vector3(_rigidbody.velocity.x, _rigidbody.velocity.y, 0);
-            _animator.SetFloat("ClimbVelocityY", velocity.magnitude * axisDirection.y);
-            _animator.SetFloat("ClimbVelocityX", velocity.magnitude * axisDirection.x);   
+            // Vector3 velocity = new Vector3(_rigidbody.velocity.x, _rigidbody.velocity.y, 0);
+
+            Vector3 localVelocity = transform.InverseTransformDirection(_rigidbody.velocity);
+            _animator.SetFloat("ClimbVelocityY", localVelocity.magnitude * axisDirection.y);
+            _animator.SetFloat("ClimbVelocityX", localVelocity.magnitude * axisDirection.x);   
         }
         else if (isPlayerGliding)
         {
@@ -224,7 +235,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void Jump()
     {
-        if (_isGrounded) 
+        bool canJump = _animator.GetCurrentAnimatorStateInfo(0).IsTag("CanJump");
+        if (_isGrounded && !_isPunching && canJump) 
         {
             Vector3 jumpDirection = Vector3.up;
             _rigidbody.AddForce(jumpDirection * _jumpForce, ForceMode.Impulse);
@@ -239,6 +251,16 @@ public class PlayerMovement : MonoBehaviour
         if (_isGrounded)
         {
             CancelGlide();
+        }
+        bool _isGameOver = Physics.CheckSphere(_groundDetector.position, _detectorRadius, _gameOverLayer);
+        if (_isGameOver)
+        {
+            OnGameOver();
+        }
+        bool _isYouWin = Physics.CheckSphere(_groundDetector.position, _detectorRadius, _youWinLayer);
+        if (_isYouWin)
+        {
+            OnYouWin();
         }
     }
 
@@ -399,6 +421,7 @@ public class PlayerMovement : MonoBehaviour
             _playerStance = PlayerStance.Glide;
             _animator.SetBool("IsGliding", true);
             _cameraManager.SetFPSClampedCamera(true, transform.rotation.eulerAngles);
+            _playerAudioManager.PlayGlideSfx();
         }
     }
 
@@ -409,6 +432,7 @@ public class PlayerMovement : MonoBehaviour
             _playerStance = PlayerStance.Stand;
             _animator.SetBool("IsGliding", false);
             _cameraManager.SetFPSClampedCamera(false, transform.rotation.eulerAngles);
+            _playerAudioManager.StopGlideSfx();
         }
     }
 
@@ -453,6 +477,8 @@ public class PlayerMovement : MonoBehaviour
         {
             if (hitObjects[i].gameObject != null)
             {
+                _playerAudioManager.PlayDestroyableSFX();
+                ScoreManager.instance.AddScore();
                 Destroy(hitObjects[i].gameObject);
             }
         }
@@ -464,6 +490,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 if (hitRespawnableObjects[i] != null)
                 {
+                    _playerAudioManager.PlayRespawnableDestroyableSFX();
                     Destroy(hitRespawnableObjects[i].gameObject);
                     Debug.Log("Object destroyed!");
                     StartCoroutine(RespawnObject(hitRespawnableObjects[i].transform.position, hitRespawnableObjects[i].transform.rotation, _respawnDelay));
